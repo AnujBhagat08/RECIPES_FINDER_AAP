@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Recipe Finder</title>
+
+  <!-- Fonts & Icons -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
+    integrity="sha512-Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg=="
+    crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"><i class="fa-solid fa-utensils"></i></div>
+        <div>
+          <h1>Recipe Finder</h1>
+          <p class="subtitle">Discover delicious meals from around the world</p>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button id="theme-toggle" class="icon-btn" aria-pressed="false" title="Toggle theme"><i
+            class="fa-solid fa-moon"></i></button>
+        <button id="open-favs" class="btn outline"><i class="fa-solid fa-heart"></i> Favorites</button>
+      </div>
+    </header>
+
+    <main class="main">
+      <!-- Search Bar & Btns -->
+      <section class="search-area glass" aria-labelledby="search-heading">
+        <form id="search-form" class="search-form" role="search" aria-label="Search recipes">
+          <input id="search-input" autocomplete="off" placeholder="Search meals or keywords (e.g. chicken, curry)" />
+          <button id="search-btn" class="btn" type="submit"><i class="fa-solid fa-magnifying-glass"></i> Search</button>
+        </form>
+
+        <!-- Category Filters Btn -->
+        <div class="filters">
+          <select id="category-filter" aria-label="Filter by category">
+            <option value="">All Categories</option>
+          </select>
+          <select id="area-filter" aria-label="Filter by area">
+            <option value="">All Areas</option>
+          </select>
+          <button id="random-btn" class="btn alt" type="button"><i class="fa-solid fa-dice"></i> Random</button>
+        </div>
+      </section>
+
+      <!-- Msg when recipe not found -->
+      <section id="message" class="message hidden" role="status" aria-live="polite"></section>
+
+      <section id="grid" class="grid" aria-live="polite"></section>
+
+      <!-- Details panel -->
+      <section id="details" class="details hidden glass" aria-hidden="true">
+        <button id="back-to-grid" class="btn link"><i class="fa-solid fa-arrow-left"></i> Back</button>
+        <div id="details-content" class="details-content"></div>
+      </section>
+    </main>
+
+    <!-- Favorites drawer -->
+    <aside id="favorites" class="drawer hidden" aria-hidden="true">
+      <div class="drawer-head">
+        <h3><i class="fa-solid fa-heart"></i> Favorites</h3>
+        <button id="close-favs" class="icon-btn" aria-label="Close favorites"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div id="fav-list" class="fav-list"></div>
+      <div class="drawer-foot">
+        <button id="clear-favs" class="btn outline">Clear All</button>
+      </div>
+    </aside>
+  </div>
+  <div>
+    <!-- Footer -->
+    <footer class="footer">
+      <small>Data from <a href="https://www.themealdb.com/api.php" target="_blank" rel="noopener">TheMealDB</a> · Built
+        with ❤️ by Anuj Bhagat</small>
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+
+</html>
