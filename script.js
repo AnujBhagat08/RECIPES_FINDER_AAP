@@ -1,13 +1,10 @@
-// script.js — optimized + smooth scroll on details
+// script.js — updated: caching, loading state, accessibility, featured on load
 
-// Our MealDB API
 const API = "https://www.themealdb.com/api/json/v1/1/";
-
-// Shortcuts of selection
 const qs = (s) => document.querySelector(s);
 const qsa = (s) => [...document.querySelectorAll(s)];
 
-// DOM Elements (selecting the elememts)
+// DOM
 const searchForm = qs("#search-form");
 const searchInput = qs("#search-input");
 const grid = qs("#grid");
@@ -24,35 +21,79 @@ const closeFavsBtn = qs("#close-favs");
 const favList = qs("#fav-list");
 const clearFavsBtn = qs("#clear-favs");
 const themeToggle = qs("#theme-toggle");
+const loader = qs("#loader");
 
-// Local storage setup
-let favorites = new Set(JSON.parse(localStorage.getItem("rf_favs") || "[]"));
+// Simple cache (in-memory) + TTL
+const CACHE_TTL = 1000 * 60 * 5; // 5 minutes
+const cache = new Map();
 
-// convert Array into String and store in localstorage
+function cachedFetchJson(url) {
+  const now = Date.now();
+  const cached = cache.get(url);
+  if (cached && now - cached.ts < CACHE_TTL) {
+    return Promise.resolve(cached.data);
+  }
+  return fetch(url)
+    .then((res) => {
+      if (!res.ok) throw new Error("Network");
+      return res.json();
+    })
+    .then((data) => {
+      cache.set(url, { ts: Date.now(), data });
+      return data;
+    });
+}
+
+// Local storage setup — ensure strings
+let favorites = new Set(
+  (JSON.parse(localStorage.getItem("rf_favs") || "[]") || []).map(String)
+);
 const saveFavs = () =>
   localStorage.setItem("rf_favs", JSON.stringify([...favorites]));
 
-// General helpers
-const showMessage = (txt, timeout = 2200) => {
+// Loading UI helpers
+function setLoading(isLoading, hint = "") {
+  if (isLoading) {
+    loader.classList.remove("hidden");
+    loader.setAttribute("aria-hidden", "false");
+    if (hint) loader.querySelector(".loader-text").textContent = hint;
+  } else {
+    loader.classList.add("hidden");
+    loader.setAttribute("aria-hidden", "true");
+    loader.querySelector(".loader-text").textContent = "Loading…";
+  }
+}
+
+function showMessage(txt, timeout = 2200) {
   message.textContent = txt;
   message.classList.remove("hidden");
   if (timeout) setTimeout(() => message.classList.add("hidden"), timeout);
-};
-const fetchJson = async (url) => {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("Network error");
-  return res.json();
-};
+}
 
-// Initialization of Theme
+// Escape simple html to avoid XSS when inserting text
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// Initialization
 (async function init() {
+  // restore theme
   if (localStorage.getItem("rf_theme") === "light") {
     document.documentElement.classList.add("light");
     document.body.classList.add("light");
+    themeToggle.setAttribute("aria-pressed", "true");
   }
+
   try {
     await loadFilters();
-    await searchMeals("");
+    // show featured: fetch 4 random meals in parallel
+    await showFeaturedMeals(4);
     renderFavsList();
   } catch (e) {
     console.error(e);
@@ -60,81 +101,119 @@ const fetchJson = async (url) => {
   }
 })();
 
-// Load category & area filters
 async function loadFilters() {
   try {
     const [cats, areas] = await Promise.all([
-      fetchJson(API + "list.php?c=list"),
-      fetchJson(API + "list.php?a=list"),
+      cachedFetchJson(API + "list.php?c=list"),
+      cachedFetchJson(API + "list.php?a=list"),
     ]);
-    cats.meals?.forEach((c) => {
+    cats?.meals?.forEach((c) => {
       const o = new Option(c.strCategory, c.strCategory);
       categoryFilter.appendChild(o);
     });
-    areas.meals?.forEach((a) => {
+    areas?.meals?.forEach((a) => {
       const o = new Option(a.strArea, a.strArea);
       areaFilter.appendChild(o);
     });
-  } catch {
-    console.warn("filters load failed");
+  } catch (err) {
+    console.warn("filters load failed", err);
   }
 }
 
-// Search, random, and filter events
+// Featured / homepage
+async function showFeaturedMeals(count = 3) {
+  setLoading(true, "Loading featured recipes");
+  try {
+    const jobs = Array.from({ length: count }, () =>
+      cachedFetchJson(API + "random.php")
+    );
+    const results = await Promise.allSettled(jobs);
+    const meals = results
+      .filter((r) => r.status === "fulfilled")
+      .flatMap((r) => r.value.meals || [])
+      .slice(0, count);
+    renderMeals(meals);
+  } catch (e) {
+    console.warn("featured load failed", e);
+    showMessage("Could not load featured recipes");
+  } finally {
+    setLoading(false);
+  }
+}
+
+// Events
 searchForm.addEventListener("submit", (e) => {
   e.preventDefault();
   const q = searchInput.value.trim();
-  q ? searchMeals(q) : showMessage("Type something to search");
+  if (!q) return showMessage("Type something to search");
+  searchMeals(q);
+  // clear after submit (small UX improvement)
+  searchInput.value = "";
 });
 
 categoryFilter.addEventListener("change", applyFilters);
 areaFilter.addEventListener("change", applyFilters);
 
 randomBtn.addEventListener("click", async () => {
+  setLoading(true, "Fetching random recipe");
+  randomBtn.disabled = true;
   try {
-    const data = await fetchJson(API + "random.php");
+    const data = await cachedFetchJson(API + "random.php");
     renderMeals(data.meals || []);
-  } catch {
+  } catch (e) {
+    console.warn(e);
     showMessage("Random fetch failed");
+  } finally {
+    randomBtn.disabled = false;
+    setLoading(false);
   }
 });
 
-// Applying filters
 async function applyFilters() {
   const cat = categoryFilter.value;
   const area = areaFilter.value;
+  setLoading(true, "Applying filters");
   try {
-    if (cat)
-      renderMeals(
-        (await fetchJson(API + "filter.php?c=" + encodeURIComponent(cat)))
-          .meals || []
+    if (cat) {
+      const data = await cachedFetchJson(
+        API + "filter.php?c=" + encodeURIComponent(cat)
       );
-    else if (area)
-      renderMeals(
-        (await fetchJson(API + "filter.php?a=" + encodeURIComponent(area)))
-          .meals || []
+      renderMeals(data.meals || []);
+    } else if (area) {
+      const data = await cachedFetchJson(
+        API + "filter.php?a=" + encodeURIComponent(area)
       );
-    else await searchMeals("");
-  } catch {
+      renderMeals(data.meals || []);
+    } else {
+      // show featured if no filter
+      await showFeaturedMeals(4);
+    }
+  } catch (e) {
+    console.warn(e);
     showMessage("Filter failed");
+  } finally {
+    setLoading(false);
   }
 }
 
-// searching meals
+// Search
 async function searchMeals(query) {
+  setLoading(true, "Searching");
   try {
-    showMessage("Loading...");
-    const url = query
-      ? API + "search.php?s=" + encodeURIComponent(query)
-      : API + "search.php?f=a";
-    const data = await fetchJson(url);
+    const url = API + "search.php?s=" + encodeURIComponent(query);
+    const data = await cachedFetchJson(url);
     renderMeals(data.meals || []);
-  } catch {
+    if (!data.meals || !data.meals.length)
+      showMessage("No recipes found", 2500);
+  } catch (e) {
+    console.warn(e);
     showMessage("Search failed — try again");
+  } finally {
+    setLoading(false);
   }
 }
 
-// Render meal cards
+// Render meals — improved: uses <img loading="lazy"> + keyboard support
 function renderMeals(meals) {
   grid.innerHTML = "";
   detailsSection.classList.add("hidden");
@@ -144,121 +223,141 @@ function renderMeals(meals) {
     const card = document.createElement("article");
     card.className = "card";
     card.dataset.id = m.idMeal;
+    card.tabIndex = 0; // keyboard focus
     card.innerHTML = `
-      <div class="thumb" style="background-image:url(${m.strMealThumb})"></div>
+      <div class="thumb"><img loading="lazy" src="${
+        m.strMealThumb
+      }" alt="${escapeHtml(m.strMeal)}"></div>
       <div class="meta">
-        <h4>${m.strMeal}</h4>
-        <span class="tag">${m.strCategory || m.strArea || ""}</span>
+        <h4>${escapeHtml(m.strMeal)}</h4>
+        <span class="tag">${escapeHtml(m.strCategory || m.strArea || "")}</span>
         <div class="actions">
-          <button class="small-btn view"><i class="fa-solid fa-eye"></i> View</button>
-          <button class="small-btn fav">${
-            favorites.has(m.idMeal)
-              ? '<i class="fa-solid fa-heart"></i> Liked'
-              : '<i class="fa-regular fa-heart"></i> Save'
-          }</button>
+          <button class="small-btn view" aria-label="View ${escapeHtml(
+            m.strMeal
+          )}"> <i class="fa-solid fa-eye"></i> View</button>
+          <button class="small-btn fav" aria-label="Toggle favorite for ${escapeHtml(
+            m.strMeal
+          )}">${
+      favorites.has(String(m.idMeal))
+        ? '<i class="fa-solid fa-heart"></i> Liked'
+        : '<i class="fa-regular fa-heart"></i> Save'
+    }</button>
         </div>
       </div>`;
 
+    // click handlers
     card.querySelector(".view").addEventListener("click", (e) => {
       e.stopPropagation();
       openDetails(m.idMeal);
     });
-
     card.querySelector(".fav").addEventListener("click", (e) => {
       e.stopPropagation();
       toggleFavorite(m);
       renderGridFavStates();
     });
-
     card.addEventListener("click", () => openDetails(m.idMeal));
+    card.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openDetails(m.idMeal);
+      }
+    });
+
     grid.appendChild(card);
   });
 }
 
-// Open meal details with smooth scroll animation
+// Details
 async function openDetails(id) {
+  setLoading(true, "Loading recipe");
   try {
-    const data = await fetchJson(API + "lookup.php?i=" + id);
+    const data = await cachedFetchJson(API + "lookup.php?i=" + id);
     const meal = data.meals?.[0];
     if (!meal) return showMessage("Recipe not found");
 
     detailsContent.innerHTML = `
       <div>
-        <img class="thumb-large" src="${meal.strMealThumb}" alt="${
+        <img class="thumb-large" src="${meal.strMealThumb}" alt="${escapeHtml(
       meal.strMeal
-    }">
+    )}">
       </div>
       <div>
-        <h2>${meal.strMeal}</h2>
+        <h2>${escapeHtml(meal.strMeal)}</h2>
         <div class="meta-row">
-          <span class="tag">${meal.strCategory || ""}</span>
-          <span class="tag">${meal.strArea || ""}</span>
+          <span class="tag">${escapeHtml(meal.strCategory || "")}</span>
+          <span class="tag">${escapeHtml(meal.strArea || "")}</span>
         </div>
         <div>
           <h4>Instructions</h4>
-          <p style="white-space:pre-wrap;line-height:1.5">${
+          <p style="white-space:pre-wrap;line-height:1.5">${escapeHtml(
             meal.strInstructions || ""
-          }</p>
+          )}</p>
         </div>
         <h4>Ingredients</h4>
         <div class="ingredients">
-          ${Array.from({ length: 20 }, (_, i) => {
-            const name = meal["strIngredient" + (i + 1)];
-            const measure = meal["strMeasure" + (i + 1)];
-            return name && name.trim()
-              ? `<div class="ingredient">${name.trim()}${
-                  measure ? " — " + measure.trim() : ""
-                }</div>`
-              : "";
-          }).join("")}
-        </div>
+  <ul>
+    ${Array.from({ length: 20 }, (_, i) => {
+      const name = meal["strIngredient" + (i + 1)];
+      const measure = meal["strMeasure" + (i + 1)];
+      return name && name.trim()
+        ? `<li>${escapeHtml(name.trim())}${
+            measure ? " — " + escapeHtml(measure.trim()) : ""
+          }</li>`
+        : "";
+    }).join("")}
+  </ul>
+</div>
         <div style="margin-top:12px">
           ${
             meal.strYoutube
-              ? `<a class="btn" target="_blank" rel="noopener" href="${meal.strYoutube}">
-                <i class="fa-brands fa-youtube"></i> Watch
-              </a>`
+              ? `<a class="btn" target="_blank" rel="noopener" href="${meal.strYoutube}"><i class="fa-brands fa-youtube"></i> Watch</a>`
               : ""
           }
           <button class="btn alt" id="fav-toggle">${
-            favorites.has(meal.idMeal) ? "Remove Favorite" : "Save to Favorites"
+            favorites.has(String(meal.idMeal))
+              ? "Remove Favorite"
+              : "Save to Favorites"
           }</button>
         </div>
       </div>`;
 
     detailsSection.classList.remove("hidden");
     detailsSection.setAttribute("aria-hidden", "false");
-
-    // Smooth scroll into view
     detailsSection.scrollIntoView({ behavior: "smooth", block: "start" });
 
-    // Favorite toggle inside details
     qs("#fav-toggle").addEventListener("click", () => {
       toggleFavorite(meal);
       renderFavsList();
       renderGridFavStates();
-      qs("#fav-toggle").textContent = favorites.has(meal.idMeal)
+      qs("#fav-toggle").textContent = favorites.has(String(meal.idMeal))
         ? "Remove Favorite"
         : "Save to Favorites";
     });
-  } catch {
+  } catch (e) {
+    console.warn(e);
     showMessage("Could not load recipe details");
+  } finally {
+    setLoading(false);
   }
 }
 
 backToGrid.addEventListener("click", () => {
   detailsSection.classList.add("hidden");
   detailsSection.setAttribute("aria-hidden", "true");
+  // keep grid state intact — no clearing
 });
 
 // Favorites
 function toggleFavorite(meal) {
-  const id = meal.idMeal;
-  favorites.has(id) ? favorites.delete(id) : favorites.add(id);
+  const id = String(meal.idMeal);
+  if (favorites.has(id)) {
+    favorites.delete(id);
+    showMessage("Removed from favorites");
+  } else {
+    favorites.add(id);
+    showMessage("Saved to favorites");
+  }
   saveFavs();
-  showMessage(
-    favorites.has(id) ? "Saved to favorites" : "Removed from favorites"
-  );
 }
 
 async function renderFavsList() {
@@ -270,32 +369,39 @@ async function renderFavsList() {
 
   for (const id of favorites) {
     try {
-      const data = await fetchJson(API + "lookup.php?i=" + id);
+      const data = await cachedFetchJson(API + "lookup.php?i=" + id);
       const meal = data.meals?.[0];
       if (!meal) continue;
       const item = document.createElement("div");
       item.className = "fav-item";
       item.innerHTML = `
-        <img src="${meal.strMealThumb}" alt="${meal.strMeal}">
+        <img src="${meal.strMealThumb}" alt="${escapeHtml(meal.strMeal)}">
         <div style="flex:1">
-          <div class="title">${meal.strMeal}</div>
+          <div class="title">${escapeHtml(meal.strMeal)}</div>
           <div style="display:flex;gap:8px;margin-top:6px">
-            <button class="small-btn view">View</button>
-            <button class="small-btn remove"><i class="fa-solid fa-trash"></i></button>
+            <button class="small-btn view" aria-label="View ${escapeHtml(
+              meal.strMeal
+            )}">View</button>
+            <button class="small-btn remove" aria-label="Remove ${escapeHtml(
+              meal.strMeal
+            )}"><i class="fa-solid fa-trash"></i></button>
           </div>
         </div>`;
+
       item
         .querySelector(".view")
         .addEventListener("click", () => openDetails(meal.idMeal));
       item.querySelector(".remove").addEventListener("click", () => {
-        favorites.delete(meal.idMeal);
-        saveFavs();
-        renderFavsList();
-        renderGridFavStates();
+        if (confirm(`Remove "${meal.strMeal}" from favorites?`)) {
+          favorites.delete(meal.idMeal);
+          saveFavs();
+          renderFavsList();
+          renderGridFavStates();
+        }
       });
       favList.appendChild(item);
-    } catch {
-      console.warn("fav fetch failed");
+    } catch (e) {
+      console.warn("fav fetch failed", e);
     }
   }
 }
@@ -307,7 +413,8 @@ openFavsBtn.addEventListener("click", () => {
 });
 closeFavsBtn.addEventListener("click", () => favDrawer.classList.add("hidden"));
 clearFavsBtn.addEventListener("click", () => {
-  if (confirm("Clear all favorites?")) {
+  if (!favorites.size) return showMessage("No favorites to clear");
+  if (confirm("Clear all favorites? This cannot be undone.")) {
     favorites.clear();
     saveFavs();
     renderFavsList();
@@ -317,7 +424,7 @@ clearFavsBtn.addEventListener("click", () => {
 
 function renderGridFavStates() {
   qsa(".card").forEach((card) => {
-    const id = card.dataset.id;
+    const id = String(card.dataset.id);
     const btn = card.querySelector(".fav");
     if (btn)
       btn.innerHTML = favorites.has(id)
@@ -343,6 +450,7 @@ function debounce(fn, wait = 300) {
     t = setTimeout(() => fn(...args), wait);
   };
 }
+
 searchInput.addEventListener(
   "input",
   debounce((e) => {
@@ -351,5 +459,5 @@ searchInput.addEventListener(
   }, 700)
 );
 
-// Keep card states fresh
+// Keep card states fresh — occasional update
 setInterval(renderGridFavStates, 1500);

@@ -28,18 +28,24 @@
       </div>
 
       <div class="controls">
-        <button id="theme-toggle" class="icon-btn" aria-pressed="false" title="Toggle theme"><i
+        <button id="theme-toggle" class="icon-btn" aria-pressed="false" title="Toggle theme" aria-label="Toggle theme"><i
             class="fa-solid fa-moon"></i></button>
-        <button id="open-favs" class="btn outline"><i class="fa-solid fa-heart"></i> Favorites</button>
+        <button id="open-favs" class="btn outline" aria-haspopup="dialog"><i class="fa-solid fa-heart"></i> Favorites</button>
       </div>
     </header>
 
     <main class="main">
+      <!-- Loader -->
+      <div id="loader" class="loader hidden" role="status" aria-live="polite" aria-hidden="true">
+        <div class="spinner" aria-hidden="true"></div>
+        <div class="loader-text">Loading…</div>
+      </div>
+
       <!-- Search Bar & Btns -->
       <section class="search-area glass" aria-labelledby="search-heading">
         <form id="search-form" class="search-form" role="search" aria-label="Search recipes">
-          <input id="search-input" autocomplete="off" placeholder="Search meals or keywords (e.g. chicken, curry)" />
-          <button id="search-btn" class="btn" type="submit"><i class="fa-solid fa-magnifying-glass"></i> Search</button>
+          <input id="search-input" autocomplete="off" placeholder="Search meals or keywords (e.g. chicken, curry)" aria-label="Search meals" />
+          <button id="search-btn" class="btn" type="submit" aria-label="Search"><i class="fa-solid fa-magnifying-glass"></i> Search</button>
         </form>
 
         <!-- Category Filters Btn -->
@@ -50,7 +56,7 @@
           <select id="area-filter" aria-label="Filter by area">
             <option value="">All Areas</option>
           </select>
-          <button id="random-btn" class="btn alt" type="button"><i class="fa-solid fa-dice"></i> Random</button>
+          <button id="random-btn" class="btn alt" type="button" aria-label="Random meal"><i class="fa-solid fa-dice"></i> Random</button>
         </div>
       </section>
 
@@ -61,13 +67,13 @@
 
       <!-- Details panel -->
       <section id="details" class="details hidden glass" aria-hidden="true">
-        <button id="back-to-grid" class="btn link"><i class="fa-solid fa-arrow-left"></i> Back</button>
+        <button id="back-to-grid" class="btn link" aria-label="Back to results"><i class="fa-solid fa-arrow-left"></i> Back</button>
         <div id="details-content" class="details-content"></div>
       </section>
     </main>
 
     <!-- Favorites drawer -->
-    <aside id="favorites" class="drawer hidden" aria-hidden="true">
+    <aside id="favorites" class="drawer hidden" aria-hidden="true" role="dialog" aria-label="Favorites drawer">
       <div class="drawer-head">
         <h3><i class="fa-solid fa-heart"></i> Favorites</h3>
         <button id="close-favs" class="icon-btn" aria-label="Close favorites"><i class="fa-solid fa-xmark"></i></button>
