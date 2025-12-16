@@ -3,6 +3,11 @@
 A modern **React-based web application** that allows users to search, explore, and discover a wide variety of recipes using an external recipes API. The app provides an easy-to-use interface where users can find recipes by entering keywords and instantly view relevant results.
 
 ---
+## 🌐 Live Demo
+
+🔗 **Live App:** [https://kmq8h7.csb.app/](https://kmq8h7.csb.app/)
+
+---
 
 ## 📌 Project Overview
 
@@ -131,12 +136,6 @@ Through this project, I learned:
 * Add **filter options** (diet, cuisine, calories)
 * Improve **accessibility and animations**
 * Optimize search using **debouncing**
-
----
-
-## 🌐 Live Demo
-
-🔗 **Live App:** [https://kmq8h7.csb.app/](https://kmq8h7.csb.app/)
 
 ---
 
