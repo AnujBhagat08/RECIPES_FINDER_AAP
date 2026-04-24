@@ -30,7 +30,6 @@ This project demonstrates practical frontend development skills such as **API in
 
 ## 🛠️ Technologies Used
 
-* **React.js** – Frontend library
 * **JavaScript (ES6+)** – Core logic
 * **HTML5** – Structure
 * **CSS3** – Styling
