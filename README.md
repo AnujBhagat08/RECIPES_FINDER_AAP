@@ -5,7 +5,7 @@ A modern **React-based web application** that allows users to search, explore, a
 ---
 ## 🌐 Live Demo
 
-🔗 **Live App:** [https://kmq8h7.csb.app/](https://kmq8h7.csb.app/)
+🔗 **Live App:** [https://recipes-finder-aap.vercel.app/](https://recipes-finder-aap.vercel.app/)
 
 ---
 
